@@ -1,19 +1,20 @@
-import math
-from typing import List, Tuple, TypeVar
+from typing import List, Tuple
 from dataclasses import dataclass
-import tkinter
 
+import math
+import tkinter
+import re
+
+# Canvas global variables
 HEIGHT = 240 * 2
 WIDTH = 256 * 2
 
+# Canvas intialization
 top = tkinter.Tk()
 top.title('Ejemplo de aplicación 3d')
 C = tkinter.Canvas(top, bg="black", height=HEIGHT, width=WIDTH)
 
-
-# Here write your program
-
-
+# Some preliminary classes and data structures
 @dataclass
 class vec3d:
     x: float
@@ -28,9 +29,10 @@ class color:
 
 @dataclass
 class triangle:
-    def __init__(self, p: Tuple[vec3d, vec3d, vec3d], c:color=color(255,255,255)):
+    def __init__(self, p: Tuple[vec3d, vec3d, vec3d], c: color = color(255, 255, 255)):
         self.c = c
         self.p = p
+
     def get_hexcolor(self):
         _rgb = (self.c.r, self.c.g, self.c.b)
         hex_color = '#%02x%02x%02x' % _rgb
@@ -40,15 +42,13 @@ class triangle:
 class mesh:
     tris: List[triangle]
 
-
 @dataclass
 class matrix:
     matrix: List[List[float]]
 
-
+# Linear algebra basic operations
 def DotProduct(v1: vec3d, v2: vec3d) -> float:
     return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z
-
 
 def MultiplyMatrix(v: vec3d, m: matrix) -> vec3d:
     x = v.x * m.matrix[0][0] + v.y * m.matrix[1][0] + \
@@ -70,76 +70,62 @@ def MultiplyMatrix(v: vec3d, m: matrix) -> vec3d:
 
     return vec3d(x, y, z)
 
+# Load models
+filename = 'cat.obj'
 
-# populate mesh
-meshCube = mesh([
-    # South
-    triangle((
-        vec3d(0, 0, 0),
-        vec3d(0, 1, 0),
-        vec3d(1, 1, 0),
-    )),
-    triangle((
-        vec3d(0, 0, 0),
-        vec3d(1, 1, 0),
-        vec3d(1, 0, 0),
-    )),
-    # EAST
-    triangle((
-        vec3d(1, 0, 0),
-        vec3d(1, 1, 0),
-        vec3d(1, 1, 1),
-    )),
-    triangle((
-        vec3d(1, 0, 0),
-        vec3d(1, 1, 1),
-        vec3d(1, 0, 1),
-    )),
-    # NORTH
-    triangle((
-        vec3d(1, 0, 1),
-        vec3d(1, 1, 1),
-        vec3d(0, 1, 1),
-    )),
-    triangle((
-        vec3d(1, 0, 1),
-        vec3d(0, 1, 1),
-        vec3d(0, 0, 1),
-    )),
-    # WEST
-    triangle((
-        vec3d(0, 0, 1),
-        vec3d(0, 1, 1),
-        vec3d(0, 1, 0),
-    )),
-    triangle((
-        vec3d(0, 0, 1),
-        vec3d(0, 1, 0),
-        vec3d(0, 0, 0),
-    )),
-    # TOP
-    triangle((
-        vec3d(0, 1, 0),
-        vec3d(0, 1, 1),
-        vec3d(1, 1, 1),
-    )),
-    triangle((
-        vec3d(0, 1, 0),
-        vec3d(1, 1, 1),
-        vec3d(1, 1, 0),
-    )),
-    # BOTTOM
-    triangle((
-        vec3d(1, 0, 1),
-        vec3d(0, 0, 1),
-        vec3d(0, 0, 0),
-    )),
-    triangle((
-        vec3d(1, 0, 1),
-        vec3d(0, 0, 0),
-        vec3d(1, 0, 0),
-    ))
-])
+# Load vertex from model
+def load_from_obj_file(filename, tag='v'):
+    vertex_pool = []
+    with open(filename) as f:
+        line = f.readline()
+        count = 0
+        while line:
+            line = f.readline()
+            p = re.compile(f'{tag} ([-+]?[0-9]*\.?[0-9]+) ([-+]?[0-9]*\.?[0-9]+) ([-+]?[0-9]*\.?[0-9]+)')
+            res = p.search(line)
+            if res:
+                vertex_pool.append((count, (res[1], res[2], res[3])))
+                count += 1
+    return vertex_pool
+
+# load triangles from model
+def load_from_obj_file_f(filename, tag='f'):
+    vertex_pool = []
+    with open(filename) as f:
+        line = f.readline()
+        count = 0
+        while line:
+            line = f.readline()
+            p = re.compile(
+                f'{tag} ([-+]?[0-9]*\.?[0-9]+)/[0-9]* ([-+]?[0-9]*\.?[0-9]+)/[0-9]* ([-+]?[0-9]*\.?[0-9]+)/[0-9]*')
+            res = p.search(line)
+            if res:
+                vertex_pool.append((count, (res[1], res[2], res[3])))
+                count += 1
+    return vertex_pool
+
+# Explanation:
+# vertex_pool stores a pool of rows of 3d points ordered by an index.
+# f_pool stores rows of 3 indices: one index (of vertex_pool) for each point of a triangle.
+vertex_pool = load_from_obj_file(filename, 'v')
+f_pool = load_from_obj_file_f(filename, 'f')
+
+# Generate the pool of triangles of the model
+def generate_mesh(vertex_pool, f_pool, scale=1.0):
+    _mesh = []
+    for f in f_pool:
+        indices = f[1]
+        p = []
+        for i in range(3):
+            p_x = float(vertex_pool[int(indices[i]) - 1][1][0]) * scale
+            p_y = float(vertex_pool[int(indices[i]) - 1][1][1]) * scale
+            p_z = float(vertex_pool[int(indices[i]) - 1][1][2]) * scale
+            p.append(vec3d(p_x,p_y,p_z))
+        _tri = triangle(p=p)
+        _mesh.append(_tri)
+    return mesh(_mesh)
+
+meshCube = generate_mesh(vertex_pool, f_pool, scale=1)
 
 # Projection Matrix
 fNear = 0.1
@@ -148,6 +134,7 @@ fFov = 90
 fAspectRatio = HEIGHT / WIDTH
 fFovRad = 1 / math.tan(fFov * 0.5 / 180. * 3.14159)
 
+# Ray theory transformations for field of vision and perspective
 matProj = matrix([
     [fAspectRatio * fFovRad, 0, 0, 0],
     [0, fFovRad, 0, 0],
@@ -155,11 +142,9 @@ matProj = matrix([
     [0, 0, (-fFar * fNear) / (fFar - fNear), 0]
 ])
 
-
 def draw_triangle(x1, y1, x2, y2, x3, y3, *options):
     drawed_triangle = C.create_polygon(x1, y1, x2, y2, x3, y3, *options)
     return drawed_triangle
-
 
 matRotZ = matrix([
     [0, 0, 0, 0],
@@ -175,11 +160,12 @@ matRotX = matrix([
     [0, 0, 0, 0]
 ])
 
+# Initialize variables
 fTheta = 0
 fElapsedTime = 0.01
 
+# Initialize camera
 vCamera = vec3d(0, 0, 0)
-
 
 def timeChanged():
     C.delete("all")
@@ -216,9 +202,9 @@ def timeChanged():
         triRotatedX = triangle((v_1, v_2, v_3))
         # Offset into screen
         triTranslated = triRotatedX
-        triTranslated.p[0].z = triRotatedX.p[0].z + 3.
-        triTranslated.p[1].z = triRotatedX.p[1].z + 3.
-        triTranslated.p[2].z = triRotatedX.p[2].z + 3.
+        triTranslated.p[0].z = triRotatedX.p[0].z + 600.
+        triTranslated.p[1].z = triRotatedX.p[1].z + 600.
+        triTranslated.p[2].z = triRotatedX.p[2].z + 600.
         # Normal derivation
         l_x = triTranslated.p[1].x - triTranslated.p[0].x
         l_y = triTranslated.p[1].y - triTranslated.p[0].y
@@ -248,8 +234,8 @@ def timeChanged():
             light.x /= l
             light.y /= l
             light.z /= l
-            dp = DotProduct(normal, light)
-            base_color = color(int(0 * dp), int(128 * dp) , int(50 * dp))
+            dp = abs(DotProduct(normal, light))
+            base_color = color(int(0 * dp), int(128 * dp), int(50 * dp))
             # Project from 3d -> 2d
             v_1 = MultiplyMatrix(triTranslated.p[0], matProj)
             v_2 = MultiplyMatrix(triTranslated.p[1], matProj)
@@ -271,11 +257,10 @@ def timeChanged():
             # Draw
             coords = (triProjected.p[0].x, triProjected.p[0].y, triProjected.p[1].x,
                       triProjected.p[1].y, triProjected.p[2].x, triProjected.p[2].y)
-            # draw_triangle(*coords, {'fill': triProjected.get_hexcolor(), 'outline': 'white'})
             draw_triangle(*coords, {'fill': triProjected.get_hexcolor(), 'outline': ''})
+
     C.pack()
     top.after(10, timeChanged)
-
 
 timeChanged()
 top.mainloop()
