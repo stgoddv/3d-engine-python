@@ -162,7 +162,7 @@ matRotX = matrix([
 
 # Initialize variables
 fTheta = 0
-fElapsedTime = 0.01
+fElapsedTime = 0.1
 
 # Initialize camera
 vCamera = vec3d(0, 0, 0)
